@@ -43,18 +43,25 @@ RUN apk add --no-cache \
         libpng \
         libzip
 
-# Copy built extensions và enable chúng
-COPY --from=builder /usr/local/lib/php/extensions /usr/local/lib/php/extensions
-RUN docker-php-ext-enable \
+# Copy PHP extensions và các file cấu hình cần thiết từ builder
+COPY --from=builder /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
+COPY --from=builder /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
+COPY --from=builder /usr/local/include/php/ /usr/local/include/php/
+COPY --from=builder /usr/local/lib/php/ /usr/local/lib/php/
+
+# Cài đặt scanelf
+RUN apk add --no-cache binutils
+
+# Kiểm tra PHP extensions và cài đặt runtime dependencies
+RUN set -eux; \
+    docker-php-ext-enable \
         bcmath \
         exif \
         gd \
         intl \
         mysqli \
-        zip
-
-# Kiểm tra PHP extensions và cài đặt runtime dependencies
-RUN set -eux; \
+        zip \
+    && \
     # Kiểm tra PHP startup
     out="$(php -r 'exit(0);')"; \
     [ -z "$out" ]; \
@@ -76,7 +83,10 @@ RUN set -eux; \
     ! { ldd "$extDir"/*.so | grep 'not found'; }; \
     # Kiểm tra PHP startup errors
     err="$(php --version 3>&1 1>&2 2>&3)"; \
-    [ -z "$err" ]
+    [ -z "$err" ] \
+    && \
+    # Dọn dẹp
+    apk del binutils
 
 # Cài đặt WP-CLI
 RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && \
