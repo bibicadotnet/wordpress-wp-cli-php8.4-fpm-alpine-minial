@@ -20,6 +20,8 @@ RUN set -eux; \
         make \
         musl-dev \
         zlib-dev \
+        less \
+        mysql-client \
     && \
     # Cấu hình và cài đặt PHP extensions
     docker-php-ext-configure gd \
@@ -57,6 +59,11 @@ RUN set -eux; \
     # Kiểm tra PHP startup errors
     err="$(php --version 3>&1 1>&2 2>&3)"; \
     [ -z "$err" ]; \
+    \
+    # Cài đặt WP-CLI
+    curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && \
+    chmod +x wp-cli.phar && \
+    mv wp-cli.phar /usr/local/bin/wp && \
     \
     # Dọn dẹp
     docker-php-source delete && \
@@ -151,7 +158,6 @@ VOLUME /var/www/html
 
 COPY --chown=www-data:www-data wp-config-docker.php /usr/src/wordpress/
 COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php-fpm"]
