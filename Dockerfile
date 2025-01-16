@@ -43,9 +43,15 @@ RUN apk add --no-cache \
         libpng \
         libzip
 
-# Copy built extensions từ builder
+# Copy built extensions và enable chúng
 COPY --from=builder /usr/local/lib/php/extensions /usr/local/lib/php/extensions
-COPY --from=builder /usr/local/etc/php/conf.d /usr/local/etc/php/conf.d
+RUN docker-php-ext-enable \
+        bcmath \
+        exif \
+        gd \
+        intl \
+        mysqli \
+        zip
 
 # Kiểm tra PHP extensions và cài đặt runtime dependencies
 RUN set -eux; \
