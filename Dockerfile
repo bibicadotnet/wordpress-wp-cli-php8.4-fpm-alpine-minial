@@ -2,7 +2,7 @@ ARG ALPINE_VERSION=3.21
 FROM alpine:${ALPINE_VERSION}
 
 # Install packages and remove default server definition
-RUN apk add --no-cache \
+RUN set -eux; \ apk add --no-cache \
   curl \
   nginx \
   php84 \
@@ -22,8 +22,8 @@ RUN apk add --no-cache \
   php84-tokenizer \
   php84-xml \
   php84-xmlreader \
-  php84-xmlwriter
-
+  php84-xmlwriter; \
+    \
     # Clean up unnecessary files
     rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
