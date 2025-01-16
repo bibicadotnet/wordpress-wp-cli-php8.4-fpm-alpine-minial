@@ -1,49 +1,71 @@
 FROM php:8.4-fpm-alpine
 
-# Cài đặt các dependencies cần thiết
-RUN apk add --no-cache \
-    bash \
-    freetype \
-    freetype-dev \
-    gcc \
-    g++ \
-    icu-dev \
-    jpeg-dev \
-    libpng \
-    libpng-dev \
-    libjpeg-turbo \
-    libjpeg-turbo-dev \
-    libwebp-dev \
-    libzip-dev \
-    make \
-    musl-dev \
-    zlib-dev
-
-# Cấu hình và cài đặt PHP extensions
-RUN docker-php-ext-configure gd \
+# Cài đặt dependencies, cấu hình PHP và dọn dẹp trong cùng một layer
+RUN set -eux; \
+    # Cài đặt các dependencies
+    apk add --no-cache \
+        bash \
+        freetype \
+        freetype-dev \
+        gcc \
+        g++ \
+        icu-dev \
+        jpeg-dev \
+        libpng \
+        libpng-dev \
+        libjpeg-turbo \
+        libjpeg-turbo-dev \
+        libwebp-dev \
+        libzip-dev \
+        make \
+        musl-dev \
+        zlib-dev \
+    && \
+    # Cấu hình và cài đặt PHP extensions
+    docker-php-ext-configure gd \
         --with-freetype \
         --with-jpeg \
         --with-webp \
-    && docker-php-ext-install -j$(nproc) \
+    && \
+    docker-php-ext-install -j$(nproc) \
         bcmath \
         exif \
         gd \
         intl \
         mysqli \
         zip \
-    && apk del --no-cache \
+    && \
+    # Dọn dẹp
+    docker-php-source delete && \
+    apk del --no-cache \
         freetype-dev \
         gcc \
         g++ \
         icu-dev \
+        jpeg-dev \
         libjpeg-turbo-dev \
         libpng-dev \
         libwebp-dev \
+        libzip-dev \
         make \
-        musl-dev
+        musl-dev \
+        zlib-dev \
+    && \
+    rm -rf \
+        /tmp/* \
+        /var/cache/apk/* \
+        /usr/src/php.tar.xz \
+        /usr/src/php.tar.xz.asc \
+        /usr/local/php/man \
+        /usr/local/include \
+        /usr/local/lib/php/doc \
+        /usr/local/lib/php/test \
+        /usr/local/php/test \
+        /usr/local/php/doc
 
 # Cấu hình opcache
-RUN docker-php-ext-enable opcache && \
+RUN set -eux; \
+    docker-php-ext-enable opcache; \
     { \
         echo 'opcache.memory_consumption=128'; \
         echo 'opcache.interned_strings_buffer=8'; \
@@ -64,7 +86,7 @@ RUN { \
         echo 'html_errors = Off'; \
     } > /usr/local/etc/php/conf.d/error-logging.ini
 
-# Cài đặt WordPress
+# Cài đặt WordPress và dọn dẹp trong cùng một layer
 RUN set -eux; \
     curl -o wordpress.tar.gz -fL "https://wordpress.org/latest.tar.gz"; \
     tar -xzf wordpress.tar.gz -C /usr/src/; \
@@ -94,12 +116,19 @@ RUN set -eux; \
         mkdir -p "wp-content/$dir"; \
     done; \
     chown -R www-data:www-data wp-content; \
-    chmod -R 1777 wp-content
+    chmod -R 1777 wp-content; \
+    \
+    # Dọn dẹp các file tạm và cache
+    rm -rf \
+        /tmp/* \
+        /var/cache/apk/* \
+        /var/www/html/*
 
 VOLUME /var/www/html
 
 COPY --chown=www-data:www-data wp-config-docker.php /usr/src/wordpress/
 COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php-fpm"]
