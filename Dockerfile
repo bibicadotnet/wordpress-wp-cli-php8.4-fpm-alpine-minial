@@ -37,6 +37,9 @@ RUN set -eux; \
     tar -xzf wordpress.tar.gz -C /usr/src/; \
     rm wordpress.tar.gz; \
     \
+    # Tạo thư mục /usr/src/wordpress nếu chưa tồn tại
+    mkdir -p /usr/src/wordpress; \
+    \
     # Configure WordPress
     [ ! -e /usr/src/wordpress/.htaccess ]; \
     { \
