@@ -6,6 +6,7 @@ RUN set -eux; \
     apk add --no-cache \
         bash \
         curl \
+        tar \
         php84 \
         php84-ctype \
         php84-curl \
@@ -25,6 +26,9 @@ RUN set -eux; \
         php84-xmlreader \
         php84-xmlwriter && \
     rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
+
+# Tạo thư mục /usr/src
+RUN mkdir -p /usr/src
 
 # Install WordPress
 RUN set -eux; \
