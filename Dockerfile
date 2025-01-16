@@ -27,9 +27,7 @@ RUN set -eux; \
     rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
 # Tạo user và group www-data
-RUN set -eux; \
-    addgroup -g 82 -S www-data; \
-    adduser -u 82 -D -S -G www-data www-data
+RUN adduser -u 82 -S www-data
 
 # Cài đặt WordPress
 RUN set -eux; \
