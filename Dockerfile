@@ -6,8 +6,7 @@ ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/relea
 RUN set -eux; \
     # Install runtime dependencies (only what's absolutely necessary)
     apk add --no-cache \
-        bash \
-        ghostscript; \
+        bash; \
     \
     # Install PHP extensions using docker-php-extension-installer
     install-php-extensions \
@@ -16,8 +15,7 @@ RUN set -eux; \
         gd \
         intl \
         mysqli \
-        zip \
-        imagick; \
+        zip; \
     \
     # Configure PHP settings
     docker-php-ext-enable opcache; \
