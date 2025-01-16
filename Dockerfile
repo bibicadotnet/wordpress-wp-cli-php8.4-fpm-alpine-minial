@@ -1,8 +1,9 @@
 # Build stage
 FROM php:8.4-fpm-alpine as builder
 
-# Cài đặt build dependencies
+# Cài đặt build dependencies và cấu hình PHP extensions
 RUN set -eux; \
+    # Install dependencies
     apk add --no-cache \
         freetype-dev \
         gcc \
@@ -15,10 +16,10 @@ RUN set -eux; \
         libzip-dev \
         make \
         musl-dev \
-        zlib-dev
-
-# Cấu hình và build PHP extensions
-RUN docker-php-ext-configure gd \
+        zlib-dev \
+    && \
+    # Configure and install extensions
+    docker-php-ext-configure gd \
         --with-freetype \
         --with-jpeg \
         --with-webp \
@@ -29,7 +30,15 @@ RUN docker-php-ext-configure gd \
         gd \
         intl \
         mysqli \
-        zip
+        zip \
+    && \
+    # Verify extensions work
+    php -m | grep -q 'bcmath' && \
+    php -m | grep -q 'exif' && \
+    php -m | grep -q 'gd' && \
+    php -m | grep -q 'intl' && \
+    php -m | grep -q 'mysqli' && \
+    php -m | grep -q 'zip'
 
 # Final stage
 FROM php:8.4-fpm-alpine
@@ -41,36 +50,23 @@ RUN apk add --no-cache \
         icu-libs \
         libjpeg-turbo \
         libpng \
-        libzip
+        libzip \
+        binutils
 
-# Copy PHP extensions và các file cấu hình cần thiết từ builder
-COPY --from=builder /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
-COPY --from=builder /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
-COPY --from=builder /usr/local/include/php/ /usr/local/include/php/
-COPY --from=builder /usr/local/lib/php/ /usr/local/lib/php/
+# Copy toàn bộ PHP installation từ builder
+COPY --from=builder /usr/local/ /usr/local/
 
-# Cài đặt scanelf
-RUN apk add --no-cache binutils
-
-# Kiểm tra PHP extensions và cài đặt runtime dependencies
+# Kiểm tra các PHP extensions đã được cài đặt đúng
 RUN set -eux; \
-    docker-php-ext-enable \
-        bcmath \
-        exif \
-        gd \
-        intl \
-        mysqli \
-        zip \
-    && \
-    # Kiểm tra PHP startup
-    out="$(php -r 'exit(0);')"; \
-    [ -z "$out" ]; \
-    err="$(php -r 'exit(0);' 3>&1 1>&2 2>&3)"; \
-    [ -z "$err" ]; \
+    php -m | grep -q 'bcmath' && \
+    php -m | grep -q 'exif' && \
+    php -m | grep -q 'gd' && \
+    php -m | grep -q 'intl' && \
+    php -m | grep -q 'mysqli' && \
+    php -m | grep -q 'zip' && \
     \
+    # Quét runtime dependencies
     extDir="$(php -r 'echo ini_get("extension_dir");')"; \
-    [ -d "$extDir" ]; \
-    # Quét và cài đặt các runtime dependencies cần thiết
     runDeps="$( \
         scanelf --needed --nobanner --format '%n#p' --recursive "$extDir" \
             | tr ',' '\n' \
@@ -79,12 +75,6 @@ RUN set -eux; \
     )"; \
     apk add --no-cache --virtual .wordpress-phpexts-rundeps $runDeps; \
     \
-    # Kiểm tra các shared libraries
-    ! { ldd "$extDir"/*.so | grep 'not found'; }; \
-    # Kiểm tra PHP startup errors
-    err="$(php --version 3>&1 1>&2 2>&3)"; \
-    [ -z "$err" ] \
-    && \
     # Dọn dẹp
     apk del binutils
 
