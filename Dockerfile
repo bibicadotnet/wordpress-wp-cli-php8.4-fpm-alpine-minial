@@ -1,44 +1,29 @@
-FROM php:8.4-fpm-alpine
+ARG ALPINE_VERSION=3.21
+FROM alpine:${ALPINE_VERSION}
 
-# Install docker-php-extension-installer
-ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
+# Install packages and remove default server definition
+RUN apk add --no-cache \
+  curl \
+  nginx \
+  php84 \
+  php84-ctype \
+  php84-curl \
+  php84-dom \
+  php84-fileinfo \
+  php84-fpm \
+  php84-gd \
+  php84-intl \
+  php84-mbstring \
+  php84-mysqli \
+  php84-opcache \
+  php84-openssl \
+  php84-phar \
+  php84-session \
+  php84-tokenizer \
+  php84-xml \
+  php84-xmlreader \
+  php84-xmlwriter
 
-RUN set -eux; \
-    # Install runtime dependencies (only what's absolutely necessary)
-    apk add --no-cache \
-        bash; \
-    \
-    # Install PHP extensions using docker-php-extension-installer
-    install-php-extensions \
-        bcmath \
-        exif \
-        gd \
-        intl \
-        mysqli \
-        zip; \
-    \
-    # Configure PHP settings
-    docker-php-ext-enable opcache; \
-    { \
-        echo 'opcache.memory_consumption=128'; \
-        echo 'opcache.interned_strings_buffer=8'; \
-        echo 'opcache.max_accelerated_files=4000'; \
-        echo 'opcache.revalidate_freq=2'; \
-    } > /usr/local/etc/php/conf.d/opcache-recommended.ini; \
-    \
-    # Configure error logging
-    { \
-        echo 'error_reporting = E_ERROR | E_WARNING | E_PARSE | E_CORE_ERROR | E_CORE_WARNING | E_COMPILE_ERROR | E_COMPILE_WARNING | E_RECOVERABLE_ERROR'; \
-        echo 'display_errors = Off'; \
-        echo 'display_startup_errors = Off'; \
-        echo 'log_errors = On'; \
-        echo 'error_log = /dev/stderr'; \
-        echo 'log_errors_max_len = 1024'; \
-        echo 'ignore_repeated_errors = On'; \
-        echo 'ignore_repeated_source = Off'; \
-        echo 'html_errors = Off'; \
-    } > /usr/local/etc/php/conf.d/error-logging.ini; \
-    \
     # Clean up unnecessary files
     rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
