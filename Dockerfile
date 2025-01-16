@@ -1,6 +1,6 @@
 FROM php:8.4-fpm-alpine
 
-# Cài đặt dependencies và cấu hình PHP
+# Cài đặt dependencies, cấu hình PHP và dọn dẹp trong cùng một layer
 RUN set -eux; \
     # Cài đặt các dependencies
     apk add --no-cache \
@@ -18,7 +18,6 @@ RUN set -eux; \
         libwebp-dev \
         libzip-dev \
         make \
-        mariadb-client \
         musl-dev \
         zlib-dev \
     && \
@@ -63,8 +62,8 @@ RUN set -eux; \
     curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && \
     chmod +x wp-cli.phar && \
     mv wp-cli.phar /usr/local/bin/wp && \
-    \
-    # Dọn dẹp triệt để
+    \    
+    # Dọn dẹp
     docker-php-source delete && \
     apk del --no-cache \
         freetype-dev \
@@ -90,12 +89,32 @@ RUN set -eux; \
         /usr/local/lib/php/doc \
         /usr/local/lib/php/test \
         /usr/local/php/test \
-        /usr/local/php/doc \
-        /usr/local/php/include \
-        /usr/src/*.tar.* \
-        ~/.composer
+        /usr/local/php/doc
 
-# Cài đặt WordPress và dọn dẹp
+# Cấu hình opcache
+RUN set -eux; \
+    docker-php-ext-enable opcache; \
+    { \
+        echo 'opcache.memory_consumption=128'; \
+        echo 'opcache.interned_strings_buffer=8'; \
+        echo 'opcache.max_accelerated_files=4000'; \
+        echo 'opcache.revalidate_freq=2'; \
+    } > /usr/local/etc/php/conf.d/opcache-recommended.ini
+
+# Cấu hình error logging
+RUN { \
+        echo 'error_reporting = E_ERROR | E_WARNING | E_PARSE | E_CORE_ERROR | E_CORE_WARNING | E_COMPILE_ERROR | E_COMPILE_WARNING | E_RECOVERABLE_ERROR'; \
+        echo 'display_errors = Off'; \
+        echo 'display_startup_errors = Off'; \
+        echo 'log_errors = On'; \
+        echo 'error_log = /dev/stderr'; \
+        echo 'log_errors_max_len = 1024'; \
+        echo 'ignore_repeated_errors = On'; \
+        echo 'ignore_repeated_source = Off'; \
+        echo 'html_errors = Off'; \
+    } > /usr/local/etc/php/conf.d/error-logging.ini
+
+# Cài đặt WordPress và dọn dẹp trong cùng một layer
 RUN set -eux; \
     curl -o wordpress.tar.gz -fL "https://wordpress.org/latest.tar.gz"; \
     tar -xzf wordpress.tar.gz -C /usr/src/; \
@@ -127,7 +146,7 @@ RUN set -eux; \
     chown -R www-data:www-data wp-content; \
     chmod -R 1777 wp-content; \
     \
-    # Dọn dẹp cuối cùng
+    # Dọn dẹp các file tạm và cache
     rm -rf \
         /tmp/* \
         /var/cache/apk/* \
