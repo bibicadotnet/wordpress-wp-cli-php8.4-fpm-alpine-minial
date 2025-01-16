@@ -1,11 +1,13 @@
 ARG ALPINE_VERSION=3.21
 FROM alpine:${ALPINE_VERSION}
 
-# Cài đặt các gói và xóa cấu hình server mặc định
+# Cài đặt các gói cơ bản và php
 RUN set -eux; \
     apk add --no-cache \
+        bash \
         curl \
         nginx \
+        shadow \
         php84 \
         php84-ctype \
         php84-curl \
@@ -28,21 +30,15 @@ RUN set -eux; \
 
 # Cài đặt WordPress
 RUN set -eux; \
-    version='latest'; \
+    mkdir -p /usr/src/wordpress; \
     curl -o wordpress.tar.gz -fL "https://wordpress.org/latest.tar.gz"; \
     tar -xzf wordpress.tar.gz -C /usr/src/; \
     rm wordpress.tar.gz; \
     \
     # Thiết lập thư mục WordPress
+    mkdir -p /usr/src/wordpress/wp-content; \
     chown -R www-data:www-data /usr/src/wordpress; \
-    cd /usr/src/wordpress && \
-    mkdir -p wp-content; \
-    for dir in /usr/src/wordpress/wp-content/*/ cache; do \
-        dir="$(basename "${dir%/}")"; \
-        mkdir -p "wp-content/$dir"; \
-    done; \
-    chown -R www-data:www-data wp-content; \
-    chmod -R 1777 wp-content; \
+    chmod -R 755 /usr/src/wordpress; \
     \
     # Cài đặt WP-CLI
     curl -o /usr/local/bin/wp https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar; \
