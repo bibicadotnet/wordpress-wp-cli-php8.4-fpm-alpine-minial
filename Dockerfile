@@ -47,6 +47,31 @@ RUN apk add --no-cache \
 COPY --from=builder /usr/local/lib/php/extensions /usr/local/lib/php/extensions
 COPY --from=builder /usr/local/etc/php/conf.d /usr/local/etc/php/conf.d
 
+# Kiểm tra PHP extensions và cài đặt runtime dependencies
+RUN set -eux; \
+    # Kiểm tra PHP startup
+    out="$(php -r 'exit(0);')"; \
+    [ -z "$out" ]; \
+    err="$(php -r 'exit(0);' 3>&1 1>&2 2>&3)"; \
+    [ -z "$err" ]; \
+    \
+    extDir="$(php -r 'echo ini_get("extension_dir");')"; \
+    [ -d "$extDir" ]; \
+    # Quét và cài đặt các runtime dependencies cần thiết
+    runDeps="$( \
+        scanelf --needed --nobanner --format '%n#p' --recursive "$extDir" \
+            | tr ',' '\n' \
+            | sort -u \
+            | awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
+    )"; \
+    apk add --no-cache --virtual .wordpress-phpexts-rundeps $runDeps; \
+    \
+    # Kiểm tra các shared libraries
+    ! { ldd "$extDir"/*.so | grep 'not found'; }; \
+    # Kiểm tra PHP startup errors
+    err="$(php --version 3>&1 1>&2 2>&3)"; \
+    [ -z "$err" ]
+
 # Cài đặt WP-CLI
 RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && \
     chmod +x wp-cli.phar && \
