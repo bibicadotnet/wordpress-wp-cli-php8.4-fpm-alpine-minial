@@ -1,16 +1,19 @@
-# Build stage
-FROM php:8.4-fpm-alpine as builder
+FROM php:8.4-fpm-alpine
 
-# Cài đặt build dependencies và cấu hình PHP extensions
+# Cài đặt dependencies, cấu hình PHP và dọn dẹp trong cùng một layer
 RUN set -eux; \
-    # Install dependencies
+    # Cài đặt các dependencies
     apk add --no-cache \
+        bash \
+        freetype \
         freetype-dev \
         gcc \
         g++ \
         icu-dev \
         jpeg-dev \
+        libpng \
         libpng-dev \
+        libjpeg-turbo \
         libjpeg-turbo-dev \
         libwebp-dev \
         libzip-dev \
@@ -18,7 +21,7 @@ RUN set -eux; \
         musl-dev \
         zlib-dev \
     && \
-    # Configure and install extensions
+    # Cấu hình và cài đặt PHP extensions
     docker-php-ext-configure gd \
         --with-freetype \
         --with-jpeg \
@@ -32,41 +35,15 @@ RUN set -eux; \
         mysqli \
         zip \
     && \
-    # Verify extensions work
-    php -m | grep -q 'bcmath' && \
-    php -m | grep -q 'exif' && \
-    php -m | grep -q 'gd' && \
-    php -m | grep -q 'intl' && \
-    php -m | grep -q 'mysqli' && \
-    php -m | grep -q 'zip'
-
-# Final stage
-FROM php:8.4-fpm-alpine
-
-# Cài đặt runtime dependencies
-RUN apk add --no-cache \
-        bash \
-        freetype \
-        icu-libs \
-        libjpeg-turbo \
-        libpng \
-        libzip \
-        binutils
-
-# Copy toàn bộ PHP installation từ builder
-COPY --from=builder /usr/local/ /usr/local/
-
-# Kiểm tra các PHP extensions đã được cài đặt đúng
-RUN set -eux; \
-    php -m | grep -q 'bcmath' && \
-    php -m | grep -q 'exif' && \
-    php -m | grep -q 'gd' && \
-    php -m | grep -q 'intl' && \
-    php -m | grep -q 'mysqli' && \
-    php -m | grep -q 'zip' && \
+    # Kiểm tra PHP extensions và runtime dependencies
+    out="$(php -r 'exit(0);')"; \
+    [ -z "$out" ]; \
+    err="$(php -r 'exit(0);' 3>&1 1>&2 2>&3)"; \
+    [ -z "$err" ]; \
     \
-    # Quét runtime dependencies
     extDir="$(php -r 'echo ini_get("extension_dir");')"; \
+    [ -d "$extDir" ]; \
+    # Quét và cài đặt các runtime dependencies cần thiết
     runDeps="$( \
         scanelf --needed --nobanner --format '%n#p' --recursive "$extDir" \
             | tr ',' '\n' \
@@ -75,13 +52,44 @@ RUN set -eux; \
     )"; \
     apk add --no-cache --virtual .wordpress-phpexts-rundeps $runDeps; \
     \
-    # Dọn dẹp
-    apk del binutils
-
-# Cài đặt WP-CLI
-RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && \
+    # Kiểm tra các shared libraries
+    ! { ldd "$extDir"/*.so | grep 'not found'; }; \
+    # Kiểm tra PHP startup errors
+    err="$(php --version 3>&1 1>&2 2>&3)"; \
+    [ -z "$err" ]; \
+    \
+    # Cài đặt WP-CLI
+    curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && \
     chmod +x wp-cli.phar && \
-    mv wp-cli.phar /usr/local/bin/wp
+    mv wp-cli.phar /usr/local/bin/wp && \
+    \    
+    # Dọn dẹp
+    docker-php-source delete && \
+    apk del --no-cache \
+        freetype-dev \
+        gcc \
+        g++ \
+        icu-dev \
+        jpeg-dev \
+        libjpeg-turbo-dev \
+        libpng-dev \
+        libwebp-dev \
+        libzip-dev \
+        make \
+        musl-dev \
+        zlib-dev \
+    && \
+    rm -rf \
+        /tmp/* \
+        /var/cache/apk/* \
+        /usr/src/php.tar.xz \
+        /usr/src/php.tar.xz.asc \
+        /usr/local/php/man \
+        /usr/local/include \
+        /usr/local/lib/php/doc \
+        /usr/local/lib/php/test \
+        /usr/local/php/test \
+        /usr/local/php/doc
 
 # Cấu hình opcache
 RUN set -eux; \
@@ -106,12 +114,29 @@ RUN { \
         echo 'html_errors = Off'; \
     } > /usr/local/etc/php/conf.d/error-logging.ini
 
-# Cài đặt WordPress
+# Cài đặt WordPress và dọn dẹp trong cùng một layer
 RUN set -eux; \
     curl -o wordpress.tar.gz -fL "https://wordpress.org/latest.tar.gz"; \
     tar -xzf wordpress.tar.gz -C /usr/src/; \
     rm wordpress.tar.gz; \
+    \
+    [ ! -e /usr/src/wordpress/.htaccess ]; \
+    { \
+        echo '# BEGIN WordPress'; \
+        echo ''; \
+        echo 'RewriteEngine On'; \
+        echo 'RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]'; \
+        echo 'RewriteBase /'; \
+        echo 'RewriteRule ^index\.php$ - [L]'; \
+        echo 'RewriteCond %{REQUEST_FILENAME} !-f'; \
+        echo 'RewriteCond %{REQUEST_FILENAME} !-d'; \
+        echo 'RewriteRule . /index.php [L]'; \
+        echo ''; \
+        echo '# END WordPress'; \
+    } > /usr/src/wordpress/.htaccess; \
+    \
     chown -R www-data:www-data /usr/src/wordpress; \
+    \
     cd /usr/src/wordpress && \
     mkdir -p wp-content; \
     for dir in /usr/src/wordpress/wp-content/*/ cache; do \
@@ -119,7 +144,13 @@ RUN set -eux; \
         mkdir -p "wp-content/$dir"; \
     done; \
     chown -R www-data:www-data wp-content; \
-    chmod -R 1777 wp-content
+    chmod -R 1777 wp-content; \
+    \
+    # Dọn dẹp các file tạm và cache
+    rm -rf \
+        /tmp/* \
+        /var/cache/apk/* \
+        /var/www/html/*
 
 VOLUME /var/www/html
 
