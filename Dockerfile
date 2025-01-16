@@ -1,29 +1,49 @@
 FROM php:8.4-fpm-alpine
 
-# persistent dependencies
-RUN set -eux; \
-    apk add --no-cache \
-    # in theory, docker-entrypoint.sh is POSIX-compliant, but priority is a working, consistent image
+# Cài đặt các dependencies cần thiết
+RUN apk add --no-cache \
     bash \
-    ; \
-    \
-    docker-php-ext-configure gd \
-        --with-avif \
+    freetype \
+    freetype-dev \
+    gcc \
+    g++ \
+    icu-dev \
+    jpeg-dev \
+    libpng \
+    libpng-dev \
+    libjpeg-turbo \
+    libjpeg-turbo-dev \
+    libwebp-dev \
+    libzip-dev \
+    make \
+    musl-dev \
+    zlib-dev
+
+# Cấu hình và cài đặt PHP extensions
+RUN docker-php-ext-configure gd \
         --with-freetype \
         --with-jpeg \
         --with-webp \
-    ; \
-    docker-php-ext-install -j "$(nproc)" \
+    && docker-php-ext-install -j$(nproc) \
         bcmath \
         exif \
         gd \
         intl \
         mysqli \
-        zip
+        zip \
+    && apk del --no-cache \
+        freetype-dev \
+        gcc \
+        g++ \
+        icu-dev \
+        libjpeg-turbo-dev \
+        libpng-dev \
+        libwebp-dev \
+        make \
+        musl-dev
 
-# Configure opcache
-RUN set -eux; \
-    docker-php-ext-enable opcache; \
+# Cấu hình opcache
+RUN docker-php-ext-enable opcache && \
     { \
         echo 'opcache.memory_consumption=128'; \
         echo 'opcache.interned_strings_buffer=8'; \
@@ -31,11 +51,8 @@ RUN set -eux; \
         echo 'opcache.revalidate_freq=2'; \
     } > /usr/local/etc/php/conf.d/opcache-recommended.ini
 
-# Configure error logging
-# https://wordpress.org/support/article/editing-wp-config-php/#configure-error-logging
+# Cấu hình error logging
 RUN { \
-    # https://www.php.net/manual/en/errorfunc.constants.php
-    # https://github.com/docker-library/wordpress/issues/420#issuecomment-517839670
         echo 'error_reporting = E_ERROR | E_WARNING | E_PARSE | E_CORE_ERROR | E_CORE_WARNING | E_COMPILE_ERROR | E_COMPILE_WARNING | E_RECOVERABLE_ERROR'; \
         echo 'display_errors = Off'; \
         echo 'display_startup_errors = Off'; \
@@ -47,14 +64,12 @@ RUN { \
         echo 'html_errors = Off'; \
     } > /usr/local/etc/php/conf.d/error-logging.ini
 
-# Install WordPress
+# Cài đặt WordPress
 RUN set -eux; \
-    version='latest'; \
     curl -o wordpress.tar.gz -fL "https://wordpress.org/latest.tar.gz"; \
     tar -xzf wordpress.tar.gz -C /usr/src/; \
     rm wordpress.tar.gz; \
     \
-    # https://wordpress.org/support/article/htaccess/
     [ ! -e /usr/src/wordpress/.htaccess ]; \
     { \
         echo '# BEGIN WordPress'; \
@@ -72,8 +87,6 @@ RUN set -eux; \
     \
     chown -R www-data:www-data /usr/src/wordpress; \
     \
-    # pre-create wp-content (and single-level children) for folks who want to bind-mount themes, etc so permissions are pre-created properly instead of root:root
-    # wp-content/cache: https://github.com/docker-library/wordpress/issues/534#issuecomment-705733507
     cd /usr/src/wordpress && \
     mkdir -p wp-content; \
     for dir in /usr/src/wordpress/wp-content/*/ cache; do \
