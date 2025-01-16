@@ -1,9 +1,9 @@
-FROM php:8.4-fpm-alpine
+# Build stage
+FROM php:8.4-fpm-alpine as builder
 
-# Cài đặt dependencies, cấu hình PHP và dọn dẹp trong cùng một layer
+# Cài đặt build dependencies
 RUN set -eux; \
-    # Cài đặt các dependencies
-    apk add --no-cache --virtual .build-deps \
+    apk add --no-cache \
         freetype-dev \
         gcc \
         g++ \
@@ -15,18 +15,10 @@ RUN set -eux; \
         libzip-dev \
         make \
         musl-dev \
-        zlib-dev \
-    && \
-    apk add --no-cache \
-        bash \
-        freetype \
-        icu-libs \
-        libjpeg-turbo \
-        libpng \
-        libzip \
-    && \
-    # Cấu hình và cài đặt PHP extensions
-    docker-php-ext-configure gd \
+        zlib-dev
+
+# Cấu hình và build PHP extensions
+RUN docker-php-ext-configure gd \
         --with-freetype \
         --with-jpeg \
         --with-webp \
@@ -37,30 +29,30 @@ RUN set -eux; \
         gd \
         intl \
         mysqli \
-        zip \
-    && \
-    # Cài đặt WP-CLI
-    curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && \
+        zip
+
+# Final stage
+FROM php:8.4-fpm-alpine
+
+# Cài đặt runtime dependencies
+RUN apk add --no-cache \
+        bash \
+        freetype \
+        icu-libs \
+        libjpeg-turbo \
+        libpng \
+        libzip
+
+# Copy built extensions từ builder
+COPY --from=builder /usr/local/lib/php/extensions /usr/local/lib/php/extensions
+COPY --from=builder /usr/local/etc/php/conf.d /usr/local/etc/php/conf.d
+
+# Cài đặt WP-CLI
+RUN curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && \
     chmod +x wp-cli.phar && \
-    mv wp-cli.phar /usr/local/bin/wp && \
-    \
-    # Dọn dẹp build dependencies
-    apk del .build-deps && \
-    docker-php-source delete && \
-    rm -rf \
-        /tmp/* \
-        /var/cache/apk/* \
-        /usr/src/php.tar.xz \
-        /usr/src/php.tar.xz.asc \
-        /usr/local/php/man \
-        /usr/local/include \
-        /usr/local/lib/php/doc \
-        /usr/local/lib/php/test \
-        /usr/local/php/test \
-        /usr/local/php/doc
+    mv wp-cli.phar /usr/local/bin/wp
 
 # Cấu hình opcache
-COPY --chmod=644 php.ini-production /usr/local/etc/php/php.ini
 RUN set -eux; \
     docker-php-ext-enable opcache; \
     { \
@@ -68,7 +60,6 @@ RUN set -eux; \
         echo 'opcache.interned_strings_buffer=8'; \
         echo 'opcache.max_accelerated_files=4000'; \
         echo 'opcache.revalidate_freq=2'; \
-        echo 'opcache.enable_cli=1'; \
     } > /usr/local/etc/php/conf.d/opcache-recommended.ini
 
 # Cấu hình error logging
@@ -84,14 +75,20 @@ RUN { \
         echo 'html_errors = Off'; \
     } > /usr/local/etc/php/conf.d/error-logging.ini
 
-# Cài đặt WordPress và dọn dẹp trong cùng một layer
+# Cài đặt WordPress
 RUN set -eux; \
-    curl -o wordpress.tar.gz -fL "https://wordpress.org/latest.tar.gz" && \
-    tar -xzf wordpress.tar.gz -C /usr/src/ && \
-    rm wordpress.tar.gz && \
-    chown -R www-data:www-data /usr/src/wordpress && \
-    mkdir -p /usr/src/wordpress/wp-content && \
-    chmod -R 1777 /usr/src/wordpress/wp-content
+    curl -o wordpress.tar.gz -fL "https://wordpress.org/latest.tar.gz"; \
+    tar -xzf wordpress.tar.gz -C /usr/src/; \
+    rm wordpress.tar.gz; \
+    chown -R www-data:www-data /usr/src/wordpress; \
+    cd /usr/src/wordpress && \
+    mkdir -p wp-content; \
+    for dir in /usr/src/wordpress/wp-content/*/ cache; do \
+        dir="$(basename "${dir%/}")"; \
+        mkdir -p "wp-content/$dir"; \
+    done; \
+    chown -R www-data:www-data wp-content; \
+    chmod -R 1777 wp-content
 
 VOLUME /var/www/html
 
