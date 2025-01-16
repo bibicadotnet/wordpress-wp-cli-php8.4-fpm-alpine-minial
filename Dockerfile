@@ -1,57 +1,41 @@
 ARG ALPINE_VERSION=3.21
 FROM alpine:${ALPINE_VERSION}
 
-# Install packages and remove default server definition
-RUN set -eux; \ apk add --no-cache \
-  curl \
-  nginx \
-  php84 \
-  php84-ctype \
-  php84-curl \
-  php84-dom \
-  php84-fileinfo \
-  php84-fpm \
-  php84-gd \
-  php84-intl \
-  php84-mbstring \
-  php84-mysqli \
-  php84-opcache \
-  php84-openssl \
-  php84-phar \
-  php84-session \
-  php84-tokenizer \
-  php84-xml \
-  php84-xmlreader \
-  php84-xmlwriter; \
-    \
-    # Clean up unnecessary files
+# Cài đặt các gói và xóa cấu hình server mặc định
+RUN set -eux; \
+    apk add --no-cache \
+        curl \
+        nginx \
+        php84 \
+        php84-ctype \
+        php84-curl \
+        php84-dom \
+        php84-fileinfo \
+        php84-fpm \
+        php84-gd \
+        php84-intl \
+        php84-mbstring \
+        php84-mysqli \
+        php84-opcache \
+        php84-openssl \
+        php84-phar \
+        php84-session \
+        php84-tokenizer \
+        php84-xml \
+        php84-xmlreader \
+        php84-xmlwriter && \
     rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
-# Install WordPress
+# Cài đặt WordPress
 RUN set -eux; \
     version='latest'; \
     curl -o wordpress.tar.gz -fL "https://wordpress.org/latest.tar.gz"; \
     tar -xzf wordpress.tar.gz -C /usr/src/; \
     rm wordpress.tar.gz; \
     \
-    # Configure WordPress
-    [ ! -e /usr/src/wordpress/.htaccess ]; \
-    { \
-        echo '# BEGIN WordPress'; \
-        echo ''; \
-        echo 'RewriteEngine On'; \
-        echo 'RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]'; \
-        echo 'RewriteBase /'; \
-        echo 'RewriteRule ^index\.php$ - [L]'; \
-        echo 'RewriteCond %{REQUEST_FILENAME} !-f'; \
-        echo 'RewriteCond %{REQUEST_FILENAME} !-d'; \
-        echo 'RewriteRule . /index.php [L]'; \
-        echo ''; \
-        echo '# END WordPress'; \
-    } > /usr/src/wordpress/.htaccess; \
-    \
-    # Set up WordPress directories
+    # Thiết lập thư mục WordPress
     chown -R www-data:www-data /usr/src/wordpress; \
+    cd /usr/src/wordpress && \
     mkdir -p wp-content; \
     for dir in /usr/src/wordpress/wp-content/*/ cache; do \
         dir="$(basename "${dir%/}")"; \
@@ -60,15 +44,16 @@ RUN set -eux; \
     chown -R www-data:www-data wp-content; \
     chmod -R 1777 wp-content; \
     \
-    # Install WP-CLI
+    # Cài đặt WP-CLI
     curl -o /usr/local/bin/wp https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar; \
     chmod +x /usr/local/bin/wp
 
-VOLUME /var/www/html
-
+# Sao chép các file cấu hình
 COPY --chown=www-data:www-data wp-config-docker.php /usr/src/wordpress/
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+VOLUME /var/www/html
 
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php-fpm"]
