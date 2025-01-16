@@ -6,8 +6,6 @@ RUN set -eux; \
     apk add --no-cache \
         bash \
         curl \
-        nginx \
-        shadow \
         php84 \
         php84-ctype \
         php84-curl \
@@ -27,6 +25,11 @@ RUN set -eux; \
         php84-xmlreader \
         php84-xmlwriter && \
     rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
+
+# Tạo user và group www-data
+RUN set -eux; \
+    addgroup -g 82 -S www-data; \
+    adduser -u 82 -D -S -G www-data www-data
 
 # Cài đặt WordPress
 RUN set -eux; \
