@@ -1,14 +1,10 @@
 FROM php:8.4-fpm-alpine
 
+# Cài đặt dependencies, cấu hình PHP và dọn dẹp trong cùng một layer
 RUN set -eux; \
-	apk add --no-cache \
-		bash \
-	;
-
-RUN set -ex; \
-	\
-	apk add --no-cache --virtual .build-deps \
-		$PHPIZE_DEPS \
+    # Cài đặt các dependencies
+    apk add --no-cache \
+        bash \
         freetype \
         freetype-dev \
         gcc \
