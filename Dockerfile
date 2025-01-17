@@ -1,22 +1,22 @@
 FROM php:8.4-fpm-alpine
 
-# Cài đặt bash và elfutils
+# persistent dependencies
 RUN set -eux && \
     apk add --no-cache \
-    bash && \
+        bash && \
 
-# Cài đặt các phần mở rộng PHP cần thiết
+# Install the necessary PHP extensions
 RUN set -ex && \
     apk add --no-cache --virtual .build-deps \
-    $PHPIZE_DEPS \
-    freetype-dev \
-    icu-dev \
-    libheif-dev \
-    libavif-dev \
-    libjpeg-turbo-dev \
-    libpng-dev \
-    libwebp-dev \
-    libzip-dev && \
+        $PHPIZE_DEPS \
+        freetype-dev \
+        icu-dev \
+        libheif-dev \
+        libavif-dev \
+        libjpeg-turbo-dev \
+        libpng-dev \
+        libwebp-dev \
+        libzip-dev && \
     docker-php-ext-configure gd \
         --with-avif \
         --with-freetype \
@@ -29,7 +29,8 @@ RUN set -ex && \
         intl \
         mysqli \
         zip && \
-# Kiểm tra lỗi cài đặt
+
+# Check and install any additional required dependencies
     out="$(php -r 'exit(0);')" && \
     [ -z "$out" ] && \
     err="$(php -r 'exit(0);' 3>&1 1>&2 2>&3)" && \
@@ -38,17 +39,19 @@ RUN set -ex && \
     [ -d "$extDir" ] && \
     runDeps="$( \
         scanelf --needed --nobanner --format '%n#p' --recursive "$extDir" \
-        | tr ',' '\n' \
-        | sort -u \
-        | awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
+            | tr ',' '\n' \
+            | sort -u \
+            | awk 'system("[ -e /usr/local/lib/" $1 " ]") == 0 { next } { print "so:" $1 }' \
     )" && \
     apk add --no-network --virtual .wordpress-phpexts-rundeps $runDeps && \
     apk del --no-network .build-deps && \
     ! { ldd "$extDir"/*.so | grep 'not found'; } && \
+
+# Check for errors in PHP extensions
     err="$(php --version 3>&1 1>&2 2>&3)" && \
     [ -z "$err" ]
 
-# Thiết lập PHP.ini
+# Set recommended PHP.ini settings
 RUN set -eux && \
     docker-php-ext-enable opcache && \
     { \
@@ -58,7 +61,7 @@ RUN set -eux && \
         echo 'opcache.revalidate_freq=2'; \
     } > /usr/local/etc/php/conf.d/opcache-recommended.ini && \
 
-# Cài đặt logging
+# PHP error logging configuration
 RUN { \
     echo 'error_reporting = E_ERROR | E_WARNING | E_PARSE | E_CORE_ERROR | E_CORE_WARNING | E_COMPILE_ERROR | E_COMPILE_WARNING | E_RECOVERABLE_ERROR'; \
     echo 'display_errors = Off'; \
@@ -71,12 +74,11 @@ RUN { \
     echo 'html_errors = Off'; \
 } > /usr/local/etc/php/conf.d/error-logging.ini && \
 
-# Cài đặt WordPress
+# Install WordPress and configure .htaccess file
 RUN set -eux && \
-    curl -o wordpress.tar.gz -fL "https://wordpress.org/latest.tar.gz"&& \
-    tar -xzf wordpress.tar.gz -C /usr/src/&& \
-    rm wordpress.tar.gz \
-    # Thêm file .htaccess
+    curl -o wordpress.tar.gz -fL "https://wordpress.org/latest.tar.gz" && \
+    tar -xzf wordpress.tar.gz -C /usr/src/ && \
+    rm wordpress.tar.gz && \
     [ ! -e /usr/src/wordpress/.htaccess ] && \
     { \
         echo '# BEGIN WordPress'; \
@@ -92,6 +94,8 @@ RUN set -eux && \
         echo '# END WordPress'; \
     } > /usr/src/wordpress/.htaccess && \
     chown -R www-data:www-data /usr/src/wordpress && \
+
+    # Create wp-content directories for mount
     mkdir wp-content && \
     for dir in /usr/src/wordpress/wp-content/*/ cache; do \
         dir="$(basename "${dir%/}")" && \
