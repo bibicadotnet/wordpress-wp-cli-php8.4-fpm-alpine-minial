@@ -59,39 +59,6 @@ RUN curl -o wordpress.tar.gz -fL "https://wordpress.org/latest.tar.gz" && \
     rm wordpress.tar.gz && \
     chown -R www-data:www-data /usr/src/wordpress
 
-# Stage 2: Final image
-FROM php:8.4-fpm-alpine
-
-# Sao chép từ stage build
-COPY --from=build /usr/local/etc/php/conf.d /usr/local/etc/php/conf.d
-COPY --from=build /usr/local/bin/wp /usr/local/bin/wp
-COPY --from=build /usr/src/wordpress /usr/src/wordpress
-
-# Cài đặt runtime dependencies
-RUN set -eux; \
-    apk add --no-cache \
-        bash \
-        freetype \
-        icu \
-        jpeg \
-        libpng \
-        libwebp \
-        libzip \
-        zlib
-
-# Cấu hình error logging
-RUN { \
-        echo 'error_reporting = E_ERROR | E_WARNING | E_PARSE | E_CORE_ERROR | E_CORE_WARNING | E_COMPILE_ERROR | E_COMPILE_WARNING | E_RECOVERABLE_ERROR'; \
-        echo 'display_errors = Off'; \
-        echo 'display_startup_errors = Off'; \
-        echo 'log_errors = On'; \
-        echo 'error_log = /dev/stderr'; \
-        echo 'log_errors_max_len = 1024'; \
-        echo 'ignore_repeated_errors = On'; \
-        echo 'ignore_repeated_source = Off'; \
-        echo 'html_errors = Off'; \
-    } > /usr/local/etc/php/conf.d/error-logging.ini
-
 # Tạo htaccess mặc định cho WordPress
 RUN { \
         echo '# BEGIN WordPress'; \
@@ -108,13 +75,52 @@ RUN { \
     } > /usr/src/wordpress/.htaccess && \
     mkdir -p /usr/src/wordpress/wp-content/cache && \
     chown -R www-data:www-data /usr/src/wordpress && \
+    chmod -R 755 /usr/src/wordpress && \
     chmod -R 1777 /usr/src/wordpress/wp-content
 
-# Khai báo volumes và entrypoint
-VOLUME /var/www/html
-COPY --chown=www-data:www-data wp-config-docker.php /usr/src/wordpress/
+# Cấu hình error logging
+RUN { \
+        echo 'error_reporting = E_ERROR | E_WARNING | E_PARSE | E_CORE_ERROR | E_CORE_WARNING | E_COMPILE_ERROR | E_COMPILE_WARNING | E_RECOVERABLE_ERROR'; \
+        echo 'display_errors = Off'; \
+        echo 'display_startup_errors = Off'; \
+        echo 'log_errors = On'; \
+        echo 'error_log = /dev/stderr'; \
+        echo 'log_errors_max_len = 1024'; \
+        echo 'ignore_repeated_errors = On'; \
+        echo 'ignore_repeated_source = Off'; \
+        echo 'html_errors = Off'; \
+    } > /usr/local/etc/php/conf.d/error-logging.ini
+
+# Sao chép docker-entrypoint.sh và cấp quyền thực thi
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Stage 2: Final image
+FROM php:8.4-fpm-alpine
+
+# Sao chép từ build stage
+COPY --from=build /usr/local/etc/php/conf.d /usr/local/etc/php/conf.d
+COPY --from=build /usr/local/bin/wp /usr/local/bin/wp
+COPY --from=build /usr/src/wordpress /usr/src/wordpress
+
+# Sao chép docker-entrypoint.sh từ build stage
+COPY --from=build /usr/local/bin/docker-entrypoint.sh /usr/local/bin/
+
+# Cài đặt runtime dependencies
+RUN set -eux; \
+    apk add --no-cache \
+        bash \
+        freetype \
+        icu \
+        jpeg \
+        libpng \
+        libwebp \
+        libzip \
+        zlib
+
+# Khai báo volumes
+VOLUME /var/www/html
+
+# ENTRYPOINT và CMD
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["php-fpm"]
