@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0  # Cần thiết để git push hoạt động
 
-      # Các bước build Docker (giữ nguyên)
+      # Các bước build Docker
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2        
 
@@ -35,7 +35,7 @@ jobs:
           tags: bibica/wordpress-wp-cli-php8.4-fpm-alpine-minial
           platforms: linux/amd64,linux/arm64
 
-      # Bước tạo commit rỗng (đã fix lỗi permission)
+      # Tạo commit rỗng (để tránh tình huống "there hasn't been activity in this repository for at least 60 days")
       - name: Create empty commit to keep repo alive
         if: success()
         run: |
