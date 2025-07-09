@@ -6,16 +6,17 @@ Phiên bản PHP 8.4 được duy trì để sử dụng trên [Docker-LCMP-Mult
 * Cài đặt thêm `WP-CLI`
 * Duy trì trên 2 nền tảng thông dụng `amd64` và `arm64`
 * Cập nhập 1 ngày 1 lần lúc 0h sáng theo giờ Việt Nam (UTC +7)
-* Dung lượng ~ 67.25 MB
+* Dung lượng ~ 70 MB
 
 ``` php -v
-PHP 8.4.2 (cli) (built: Jan  8 2025 19:12:14) (NTS)
+PHP 8.4.10 (cli) (built: Jul  3 2025 23:28:00) (NTS)
 Copyright (c) The PHP Group
 Built by https://github.com/docker-library/php
-Zend Engine v4.4.2, Copyright (c) Zend Technologies
-    with Zend OPcache v8.4.2, Copyright (c), by Zend Technologies
+Zend Engine v4.4.10, Copyright (c) Zend Technologies
+    with Zend OPcache v8.4.10, Copyright (c), by Zend Technologies
 ```
-```[PHP Modules]
+``` php -m
+[PHP Modules]
 bcmath
 Core
 ctype
